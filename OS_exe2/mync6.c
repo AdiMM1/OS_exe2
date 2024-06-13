@@ -29,7 +29,75 @@ void handle_timeout(int sig) {
 }
 
 // Function to create and set up the server Unix domain socket
-void server(const char *socket_path, int *input_fd) {
+void open_server_datagram(const char *socket_path, int *input_fd) {
+    struct sockaddr_un server_addr;
+
+    *input_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (*input_fd < 0) {
+        perror("socket");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, socket_path, sizeof(server_addr.sun_path) - 1);
+
+    unlink(socket_path); // Remove any previous socket with the same name
+    if (bind(*input_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("bind");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(*input_fd, 1) < 0) {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+
+    int client_fd = accept(*input_fd, NULL, NULL);
+    if (client_fd < 0) {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
+    close(*input_fd);
+    *input_fd = client_fd;
+}
+
+// Function to create and set up the client Unix domain socket
+void open_client_datagram(const char *socket_path, int *output_fd) {
+    struct sockaddr_un server_addr;
+
+    *output_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (*output_fd < 0) {
+        perror("socket");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, socket_path, sizeof(server_addr.sun_path) - 1);
+
+    if (connect(*output_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("connect");
+        exit(EXIT_FAILURE);
+    }
+}
+
+// Function to redirect input
+void redirect_in(int fd) {
+    if (fd != -1) {
+        dup2(fd, STDIN_FILENO);
+    }
+}
+
+// Function to redirect output
+void redirect_out(int fd) {
+    if (fd != -1) {
+        dup2(fd, STDOUT_FILENO);
+    }
+}
+
+// Function to create and set up the server Unix domain socket
+void open_server_stream(const char *socket_path, int *input_fd) {
     struct sockaddr_un server_addr;
 
     *input_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -63,7 +131,7 @@ void server(const char *socket_path, int *input_fd) {
 }
 
 // Function to create and set up the client Unix domain socket
-void client(const char *socket_path, int *output_fd) {
+void open_client_stream(const char *socket_path, int *output_fd) {
     struct sockaddr_un server_addr;
 
     *output_fd = socket(AF_UNIX, SOCK_STREAM, 0);
